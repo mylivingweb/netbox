@@ -214,7 +214,8 @@ class RIRListView(ObjectListView):
             aggregate_list = Aggregate.objects.filter(family=family, rir=rir)
             for aggregate in aggregate_list:
 
-                queryset = Prefix.objects.filter(prefix__net_contained_or_equal=str(aggregate.prefix))
+                queryset = Prefix.objects.filter(
+                    prefix__net_contained_or_equal=str(aggregate.prefix))
 
                 # Find all consumed space for each prefix status (we ignore containers for this purpose).
                 active_prefixes = netaddr.cidr_merge(
@@ -488,6 +489,7 @@ class PrefixView(View):
 
         return render(request, 'ipam/prefix.html', {
             'prefix': prefix,
+            'parent_prefixes': parent_prefixes,
             'aggregate': aggregate,
             'parent_prefix_table': parent_prefix_table,
             'duplicate_prefix_table': duplicate_prefix_table,
@@ -499,7 +501,14 @@ class PrefixPrefixesView(View):
     def get(self, request, pk):
 
         prefix = get_object_or_404(Prefix.objects.all(), pk=pk)
-
+        # Get parent prefixes for breadcrumb views
+        parent_prefixes = Prefix.objects.filter(
+            Q(vrf=prefix.vrf) | Q(vrf__isnull=True)
+        ).filter(
+            prefix__net_contains=str(prefix.prefix)
+        ).select_related(
+            'site', 'role'
+        ).annotate_depth()
         # Child prefixes table
         child_prefixes = prefix.get_child_prefixes().select_related(
             'site', 'vlan', 'role',
@@ -528,6 +537,7 @@ class PrefixPrefixesView(View):
 
         return render(request, 'ipam/prefix_prefixes.html', {
             'prefix': prefix,
+            'parent_prefixes': parent_prefixes,
             'first_available_prefix': prefix.get_first_available_prefix(),
             'prefix_table': prefix_table,
             'permissions': permissions,
@@ -541,6 +551,18 @@ class PrefixIPAddressesView(View):
     def get(self, request, pk):
 
         prefix = get_object_or_404(Prefix.objects.all(), pk=pk)
+        # Get parent prefixes for breadcrumb views
+        parent_prefixes = Prefix.objects.filter(
+            Q(vrf=prefix.vrf) | Q(vrf__isnull=True)
+        ).filter(
+            prefix__net_contains=str(prefix.prefix)
+        ).select_related(
+            'site', 'role'
+        ).annotate_depth()
+        # Child prefixes table
+        child_prefixes = prefix.get_child_prefixes().select_related(
+            'site', 'vlan', 'role',
+        ).annotate_depth(limit=0)
 
         # Find all IPAddresses belonging to this Prefix
         ipaddresses = prefix.get_child_ips().select_related(
@@ -567,6 +589,7 @@ class PrefixIPAddressesView(View):
 
         return render(request, 'ipam/prefix_ipaddresses.html', {
             'prefix': prefix,
+            'parent_prefixes': parent_prefixes,
             'first_available_ip': prefix.get_first_available_ip(),
             'ip_table': ip_table,
             'permissions': permissions,
@@ -638,7 +661,8 @@ class IPAddressView(View):
 
     def get(self, request, pk):
 
-        ipaddress = get_object_or_404(IPAddress.objects.select_related('vrf__tenant', 'tenant'), pk=pk)
+        ipaddress = get_object_or_404(
+            IPAddress.objects.select_related('vrf__tenant', 'tenant'), pk=pk)
 
         # Parent prefixes table
         parent_prefixes = Prefix.objects.filter(
@@ -676,6 +700,7 @@ class IPAddressView(View):
 
         return render(request, 'ipam/ipaddress.html', {
             'ipaddress': ipaddress,
+            'parent_prefixes': parent_prefixes,
             'parent_prefixes_table': parent_prefixes_table,
             'duplicate_ips_table': duplicate_ips_table,
             'related_ips_table': related_ips_table,
@@ -774,7 +799,8 @@ class IPAddressBulkImportView(PermissionRequiredMixin, BulkImportView):
 
 class IPAddressBulkEditView(PermissionRequiredMixin, BulkEditView):
     permission_required = 'ipam.change_ipaddress'
-    queryset = IPAddress.objects.select_related('vrf__tenant', 'tenant').prefetch_related('interface__device')
+    queryset = IPAddress.objects.select_related(
+        'vrf__tenant', 'tenant').prefetch_related('interface__device')
     filter = filters.IPAddressFilter
     table = tables.IPAddressTable
     form = forms.IPAddressBulkEditForm
@@ -783,7 +809,8 @@ class IPAddressBulkEditView(PermissionRequiredMixin, BulkEditView):
 
 class IPAddressBulkDeleteView(PermissionRequiredMixin, BulkDeleteView):
     permission_required = 'ipam.delete_ipaddress'
-    queryset = IPAddress.objects.select_related('vrf__tenant', 'tenant').prefetch_related('interface__device')
+    queryset = IPAddress.objects.select_related(
+        'vrf__tenant', 'tenant').prefetch_related('interface__device')
     filter = filters.IPAddressFilter
     table = tables.IPAddressTable
     default_return_url = 'ipam:ipaddress_list'
@@ -867,7 +894,8 @@ class VLANGroupVLANsView(View):
 #
 
 class VLANListView(ObjectListView):
-    queryset = VLAN.objects.select_related('site', 'group', 'tenant', 'role').prefetch_related('prefixes')
+    queryset = VLAN.objects.select_related(
+        'site', 'group', 'tenant', 'role').prefetch_related('prefixes')
     filter = filters.VLANFilter
     filter_form = forms.VLANFilterForm
     table = tables.VLANDetailTable

@@ -9,6 +9,11 @@
                 {% if prefix.vrf %}
                     <li><a href="{% url 'ipam:vrf' pk=prefix.vrf.pk %}">{{ prefix.vrf }}</a></li>
                 {% endif %}
+                {% if parent_prefixes %}
+                  {% for p in parent_prefixes %}
+                    <li><a href="{% url 'ipam:prefix' pk=p.pk %}">{{ p.prefix }}</a></li>
+                  {% endfor %}
+                {% endif %}
                 <li>{{ prefix }}</li>
             </ol>
         </div>
